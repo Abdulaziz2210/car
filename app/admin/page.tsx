@@ -1,255 +1,287 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useRouter } from "next/navigation"
-import { AlertCircle } from "lucide-react"
+import { BarChart, LineChart, PieChart, Send } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-// Convert raw score to IELTS band score
-const calculateBandScore = (rawScore: number, totalQuestions: number): number => {
-  // Return 0 if the raw score is 0
-  if (rawScore === 0) return 0
-
-  // IELTS approximate band score conversion
-  const percentage = (rawScore / totalQuestions) * 100
-
-  if (percentage >= 90) return 9.0
-  if (percentage >= 85) return 8.5
-  if (percentage >= 80) return 8.0
-  if (percentage >= 75) return 7.5
-  if (percentage >= 70) return 7.0
-  if (percentage >= 65) return 6.5
-  if (percentage >= 60) return 6.0
-  if (percentage >= 55) return 5.5
-  if (percentage >= 50) return 5.0
-  if (percentage >= 45) return 4.5
-  if (percentage >= 40) return 4.0
-  if (percentage >= 35) return 3.5
-  if (percentage >= 30) return 3.0
-  if (percentage >= 25) return 2.5
-
-  return 2.0 // Minimum band score (unless score is 0)
+interface TestResult {
+  timestamp: string
+  student: string
+  readingAnswers: Record<string, string>
+  readingScore: number
+  readingTotal: number
+  readingPercentage: number
+  readingBand: number
+  listeningAnswers: Record<string, string>
+  listeningScore: number
+  listeningTotal: number
+  listeningPercentage: number
+  listeningBand: number
+  writingTask1: string
+  writingTask2: string
+  writingTask1Words: number
+  writingTask2Words: number
+  writingBand: number
+  overallBand: number
+  completed: string
 }
 
 export default function AdminPage() {
   const router = useRouter()
   const [isAdmin, setIsAdmin] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-  const [testResults, setTestResults] = useState<any[]>([])
-  const [selectedTest, setSelectedTest] = useState<any>(null)
-  const [readingScore, setReadingScore] = useState<string>("0")
-  const [listeningScore, setListeningScore] = useState<string>("0")
-  const [writingBand, setWritingBand] = useState<string>("0")
-  const [overallBand, setOverallBand] = useState<string>("0")
-  const [telegramToken, setTelegramToken] = useState<string>("8115894799:AAGckh-QqdWre1Bkfq6l8FrQcNqmVPgLJV4")
-  const [chatId, setChatId] = useState<string>("-4196325308")
+  const [testResults, setTestResults] = useState<TestResult[]>([])
+  const [activeTab, setActiveTab] = useState("overview")
+  const [selectedResult, setSelectedResult] = useState<TestResult | null>(null)
+  const [writingBand, setWritingBand] = useState<number>(0)
+  const [readingScore, setReadingScore] = useState<number>(0)
+  const [listeningScore, setListeningScore] = useState<number>(0)
+  const [overallBand, setOverallBand] = useState<number>(0)
+  const [telegramMessage, setTelegramMessage] = useState<string>("")
   const [error, setError] = useState<string>("")
-  const [success, setSuccess] = useState<string>("")
-  const [scoreError, setScoreError] = useState<string>("")
 
   useEffect(() => {
     // Check if user is admin
-    const user = sessionStorage.getItem("currentUser")
-    if (user !== "superadmin8071") {
-      router.push("/")
-      return
+    const username = sessionStorage.getItem("currentUser")
+    const isLoggedIn = sessionStorage.getItem("isLoggedIn")
+
+    console.log("Admin check:", { username, isLoggedIn })
+
+    if (username === "superadmin8071" && isLoggedIn === "true") {
+      setIsAdmin(true)
+      loadTestResults()
+    } else {
+      // For debugging purposes, let's add a console log
+      console.log("Admin access denied:", { username, isLoggedIn })
+
+      // Instead of redirecting immediately, let's show an error message
+      setIsAdmin(false)
     }
-
-    setIsAdmin(true)
-
-    // Load test results
-    try {
-      const results = JSON.parse(localStorage.getItem("testResults") || "[]")
-      setTestResults(results)
-    } catch (err) {
-      console.error("Error loading test results:", err)
-      setTestResults([])
-    }
-
-    setIsLoading(false)
   }, [router])
 
-  const handleSelectTest = (test: any) => {
-    setSelectedTest(test)
-    setReadingScore(test.readingScore?.toString() || "0")
-    setListeningScore(test.listeningScore?.toString() || "0")
-    setWritingBand(test.writingBand?.toString() || "0")
-
-    // Calculate overall band
-    const readingBand = test.readingBand || 0
-    const listeningBand = test.listeningBand || 0
-    const writingBandValue = test.writingBand || 0
-    const overall = ((readingBand + listeningBand + writingBandValue) / 3).toFixed(1)
-    setOverallBand(overall)
+  const loadTestResults = () => {
+    try {
+      // Load test results from localStorage
+      const resultsJSON = localStorage.getItem("testResults")
+      if (resultsJSON) {
+        const results = JSON.parse(resultsJSON)
+        setTestResults(results)
+      }
+    } catch (error) {
+      console.error("Error loading test results:", error)
+    }
   }
 
-  const validateScore = (value: string, max: number): boolean => {
-    const score = Number.parseInt(value)
-    if (isNaN(score) || score < 0 || score > max) {
-      setScoreError(`Score must be between 0 and ${max}`)
+  const getAverageBand = (band: keyof TestResult) => {
+    if (testResults.length === 0) return 0
+    const sum = testResults.reduce((acc, result) => acc + (result[band] as number), 0)
+    return (sum / testResults.length).toFixed(1)
+  }
+
+  const getTestsThisWeek = () => {
+    const now = new Date()
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+
+    return testResults.filter((result) => {
+      const resultDate = new Date(result.timestamp)
+      return resultDate >= oneWeekAgo
+    }).length
+  }
+
+  const handleResultSelect = (result: TestResult) => {
+    setSelectedResult(result)
+    setWritingBand(result.writingBand || 0)
+    setReadingScore(result.readingScore || 0)
+    setListeningScore(result.listeningScore || 0)
+    setOverallBand(result.overallBand || 0)
+    setActiveTab("detail")
+    setError("")
+  }
+
+  const calculateBandScore = (score: number, total: number) => {
+    // Return 0 if score is 0
+    if (score === 0) return 0
+
+    const percentage = (score / total) * 100
+    if (percentage >= 90) return 9.0
+    if (percentage >= 85) return 8.5
+    if (percentage >= 80) return 8.0
+    if (percentage >= 75) return 7.5
+    if (percentage >= 70) return 7.0
+    if (percentage >= 65) return 6.5
+    if (percentage >= 60) return 6.0
+    if (percentage >= 55) return 5.5
+    if (percentage >= 50) return 5.0
+    if (percentage >= 40) return 4.0
+    if (percentage >= 30) return 3.0
+    if (percentage >= 20) return 2.0
+    if (percentage >= 10) return 1.0
+    return 1.0
+  }
+
+  const calculateOverallBand = () => {
+    const readingBand = calculateBandScore(readingScore, selectedResult?.readingTotal || 40)
+    const listeningBand = calculateBandScore(listeningScore, selectedResult?.listeningTotal || 40)
+    const overall = (readingBand + listeningBand + writingBand) / 3
+    return Math.round(overall * 2) / 2 // Round to nearest 0.5
+  }
+
+  const validateScores = () => {
+    setError("")
+
+    if (readingScore > 40) {
+      setError("Reading score cannot exceed 40")
       return false
     }
-    setScoreError("")
+
+    if (listeningScore > 40) {
+      setError("Listening score cannot exceed 40")
+      return false
+    }
+
+    if (writingBand > 9) {
+      setError("Writing band score cannot exceed 9.0")
+      return false
+    }
+
     return true
   }
 
-  const handleReadingScoreChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setReadingScore(value)
-
-    if (value && validateScore(value, 40)) {
-      const score = Number.parseInt(value)
-      const band = calculateBandScore(score, 40)
-
-      // Calculate new overall band
-      const listeningBand = calculateBandScore(Number.parseInt(listeningScore) || 0, 40)
-      const writingBandValue = Number.parseFloat(writingBand) || 0
-      const overall = ((band + listeningBand + writingBandValue) / 3).toFixed(1)
-      setOverallBand(overall)
-    }
-  }
-
-  const handleListeningScoreChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setListeningScore(value)
-
-    if (value && validateScore(value, 40)) {
-      const score = Number.parseInt(value)
-      const band = calculateBandScore(score, 40)
-
-      // Calculate new overall band
-      const readingBand = calculateBandScore(Number.parseInt(readingScore) || 0, 40)
-      const writingBandValue = Number.parseFloat(writingBand) || 0
-      const overall = ((readingBand + band + writingBandValue) / 3).toFixed(1)
-      setOverallBand(overall)
-    }
-  }
-
-  const handleWritingBandChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setWritingBand(value)
-
-    if (value && !isNaN(Number.parseFloat(value)) && Number.parseFloat(value) >= 0 && Number.parseFloat(value) <= 9) {
-      const band = Number.parseFloat(value)
-
-      // Calculate new overall band
-      const readingBand = calculateBandScore(Number.parseInt(readingScore) || 0, 40)
-      const listeningBand = calculateBandScore(Number.parseInt(listeningScore) || 0, 40)
-      const overall = ((readingBand + listeningBand + band) / 3).toFixed(1)
-      setOverallBand(overall)
-    }
-  }
-
   const handleUpdateScores = () => {
-    if (!selectedTest) return
+    if (!selectedResult) return
 
-    // Validate scores
-    if (!validateScore(readingScore, 40) || !validateScore(listeningScore, 40)) {
-      return
+    if (!validateScores()) return
+
+    const readingBand = calculateBandScore(readingScore, selectedResult.readingTotal)
+    const listeningBand = calculateBandScore(listeningScore, selectedResult.listeningTotal)
+    const calculatedOverallBand = calculateOverallBand()
+
+    // Update the selected result
+    const updatedResult = {
+      ...selectedResult,
+      readingScore,
+      readingBand,
+      listeningScore,
+      listeningBand,
+      writingBand,
+      overallBand: calculatedOverallBand,
     }
 
-    // Validate writing band
-    const writingBandValue = Number.parseFloat(writingBand)
-    if (isNaN(writingBandValue) || writingBandValue < 0 || writingBandValue > 9) {
-      setScoreError("Writing band score must be between 0 and 9")
-      return
-    }
-
-    // Update the selected test
-    const updatedTest = {
-      ...selectedTest,
-      readingScore: Number.parseInt(readingScore),
-      readingBand: calculateBandScore(Number.parseInt(readingScore), 40),
-      listeningScore: Number.parseInt(listeningScore),
-      listeningBand: calculateBandScore(Number.parseInt(listeningScore), 40),
-      writingBand: writingBandValue,
-      overallBand: Number.parseFloat(overallBand),
-      scored: true,
-      scoredAt: new Date().toLocaleString(),
-    }
-
-    // Update the test results array
-    const updatedResults = testResults.map((test) => (test.timestamp === selectedTest.timestamp ? updatedTest : test))
+    // Update the results array
+    const updatedResults = testResults.map((result) =>
+      result.timestamp === selectedResult.timestamp ? updatedResult : result,
+    )
 
     // Save to localStorage
     localStorage.setItem("testResults", JSON.stringify(updatedResults))
     setTestResults(updatedResults)
-    setSelectedTest(updatedTest)
+    setSelectedResult(updatedResult)
+    setOverallBand(calculatedOverallBand)
 
-    // Send results to Telegram
-    sendResultsToTelegram(updatedTest)
-      .then(() => {
-        setSuccess("Scores updated and sent successfully!")
-        setTimeout(() => setSuccess(""), 3000)
-      })
-      .catch((err) => {
-        console.error("Error sending results:", err)
-        setError("Scores updated but failed to send notification")
-        setTimeout(() => setError(""), 5000)
-      })
-  }
-
-  const sendResultsToTelegram = async (test: any) => {
+    // Prepare Telegram message
     const message = `
-📊 *IELTS Test Results - SCORED*
+*IELTS Test Results*
+Student: ${selectedResult.student}
+Date: ${new Date(selectedResult.timestamp).toLocaleString()}
 
-👤 *Student*: ${test.student}
+*Reading*
+Score: ${readingScore}/${selectedResult.readingTotal}
+Band: ${readingBand.toFixed(1)}
 
-📚 *Reading*: ${test.readingScore}/40 - Band ${test.readingBand.toFixed(1)}
-🎧 *Listening*: ${test.listeningScore}/40 - Band ${test.listeningBand.toFixed(1)}
-✍️ *Writing*: Band ${test.writingBand.toFixed(1)}
+*Listening*
+Score: ${listeningScore}/${selectedResult.listeningTotal}
+Band: ${listeningBand.toFixed(1)}
 
-🌟 *Overall Band Score*: ${test.overallBand.toFixed(1)}
+*Writing*
+Task 1 Words: ${selectedResult.writingTask1Words}
+Task 2 Words: ${selectedResult.writingTask2Words}
+Band: ${writingBand.toFixed(1)}
 
-⏰ *Scored at*: ${test.scoredAt}
-    `
+*Overall Band Score: ${calculatedOverallBand.toFixed(1)}*
+  `
+    setTelegramMessage(message)
+  }
 
-    const response = await fetch("/api/send-telegram", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        message,
-        token: telegramToken,
-        chatId: chatId,
-      }),
-    })
+  const sendToTelegram = async () => {
+    if (!telegramMessage) return
 
-    if (!response.ok) {
-      throw new Error("Failed to send results to Telegram")
+    try {
+      const response = await fetch("/api/send-telegram", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: telegramMessage }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        alert("Results sent to Telegram successfully!")
+      } else {
+        alert(`Failed to send results: ${data.error}`)
+      }
+    } catch (error) {
+      console.error("Error sending to Telegram:", error)
+      alert("Error sending results to Telegram")
     }
-
-    return response.json()
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
-  }
-
+  // If not admin, show login form
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="container mx-auto p-8 flex items-center justify-center min-h-screen">
         <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>You do not have permission to access this page.</AlertDescription>
-            </Alert>
-            <Button className="w-full mt-4" onClick={() => router.push("/")}>
-              Return to Login
-            </Button>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-center">Admin Login</CardTitle>
+            <CardDescription className="text-center">
+              Please enter your admin credentials to access the dashboard
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                const username = (e.currentTarget.elements.namedItem("username") as HTMLInputElement).value
+                const password = (e.currentTarget.elements.namedItem("password") as HTMLInputElement).value
+
+                if (username === "superadmin8071" && password === "08268071") {
+                  // Set admin session
+                  sessionStorage.setItem("isLoggedIn", "true")
+                  sessionStorage.setItem("currentUser", username)
+                  setIsAdmin(true)
+                  loadTestResults()
+                } else {
+                  setError("Invalid admin credentials")
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input id="username" name="username" required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input id="password" name="password" type="password" required />
+              </div>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+              <Button type="submit" className="w-full">
+                Login
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => router.push("/")}>
+                Back to Main Login
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>
@@ -258,245 +290,487 @@ export default function AdminPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Admin Dashboard</h1>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <Button
+          variant="outline"
+          onClick={() => {
+            sessionStorage.removeItem("isLoggedIn")
+            sessionStorage.removeItem("currentUser")
+            router.push("/")
+          }}
+        >
+          Logout
+        </Button>
+      </div>
 
-      <Tabs defaultValue="tests">
-        <TabsList className="mb-4">
-          <TabsTrigger value="tests">Test Results</TabsTrigger>
-          <TabsTrigger value="settings">Settings</TabsTrigger>
+      <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="results">Test Results</TabsTrigger>
+          {/* <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="detail">Detailed View</TabsTrigger> */}
         </TabsList>
 
-        <TabsContent value="tests">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-1">
+        <TabsContent value="overview">
+          <div className="grid gap-4 md:grid-cols-3">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Total Tests</CardTitle>
+                <BarChart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{testResults.length}</div>
+                <p className="text-xs text-muted-foreground">{getTestsThisWeek()} tests this week</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Average Reading Band</CardTitle>
+                <LineChart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{getAverageBand("readingBand")}</div>
+                <p className="text-xs text-muted-foreground">Out of 9.0 band score</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Average Listening Band</CardTitle>
+                <PieChart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{getAverageBand("listeningBand")}</div>
+                <p className="text-xs text-muted-foreground">Out of 9.0 band score</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Recent Test Results</CardTitle>
+              <CardDescription>Overview of the most recent IELTS test results</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Reading</TableHead>
+                    <TableHead>Listening</TableHead>
+                    <TableHead>Writing</TableHead>
+                    <TableHead>Overall</TableHead>
+                    <TableHead>Completed</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {testResults.slice(0, 5).map((result, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{result.student}</TableCell>
+                      <TableCell>{result.readingBand?.toFixed(1) || "Not scored"}</TableCell>
+                      <TableCell>{result.listeningBand?.toFixed(1) || "Not scored"}</TableCell>
+                      <TableCell>{result.writingBand?.toFixed(1) || "Not scored"}</TableCell>
+                      <TableCell>{result.overallBand?.toFixed(1) || "Not scored"}</TableCell>
+                      <TableCell>{new Date(result.timestamp).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => handleResultSelect(result)}>
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {testResults.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-4">
+                        No test results available
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="results">
+          <Card>
+            <CardHeader>
+              <CardTitle>All Test Results</CardTitle>
+              <CardDescription>Complete list of all IELTS test results</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Reading</TableHead>
+                    <TableHead>Listening</TableHead>
+                    <TableHead>Writing</TableHead>
+                    <TableHead>Overall</TableHead>
+                    <TableHead>Completed</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {testResults.map((result, index) => (
+                    <TableRow key={index}>
+                      <TableCell className="font-medium">{result.student}</TableCell>
+                      <TableCell>
+                        {result.readingBand?.toFixed(1) || "Not scored"} ({result.readingScore || 0}/
+                        {result.readingTotal || 40})
+                      </TableCell>
+                      <TableCell>
+                        {result.listeningBand?.toFixed(1) || "Not scored"} ({result.listeningScore || 0}/
+                        {result.listeningTotal || 40})
+                      </TableCell>
+                      <TableCell>
+                        {result.writingBand?.toFixed(1) || "Not scored"} (T1: {result.writingTask1Words || "NA"}, T2:{" "}
+                        {result.writingTask2Words || "NA"})
+                      </TableCell>
+                      <TableCell>{result.overallBand?.toFixed(1) || "Not scored"}</TableCell>
+                      <TableCell>{new Date(result.timestamp).toLocaleString()}</TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" onClick={() => handleResultSelect(result)}>
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {testResults.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-4">
+                        No test results available
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Analytics</CardTitle>
+              <CardDescription>Performance metrics and trends</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-8">
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Band Score Distribution</h3>
+                  <div className="h-[300px] flex items-end justify-around">
+                    <div className="flex flex-col items-center">
+                      <div className="bg-blue-500 w-16 h-[200px] rounded-t"></div>
+                      <div className="mt-2">Reading</div>
+                      <div className="text-sm">{getAverageBand("readingBand")}</div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="bg-green-500 w-16 h-[180px] rounded-t"></div>
+                      <div className="mt-2">Listening</div>
+                      <div className="text-sm">{getAverageBand("listeningBand")}</div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="bg-yellow-500 w-16 h-[170px] rounded-t"></div>
+                      <div className="mt-2">Writing</div>
+                      <div className="text-sm">{getAverageBand("writingBand")}</div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="bg-amber-500 w-16 h-[190px] rounded-t"></div>
+                      <div className="mt-2">Overall</div>
+                      <div className="text-sm">{getAverageBand("overallBand")}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-medium mb-2">Test Completion Statistics</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Average Reading Score</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {testResults.length > 0
+                            ? (
+                                testResults.reduce((acc, result) => acc + (result.readingPercentage || 0), 0) /
+                                testResults.length
+                              ).toFixed(1) + "%"
+                            : "0%"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Average Listening Score</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {testResults.length > 0
+                            ? (
+                                testResults.reduce((acc, result) => acc + (result.listeningPercentage || 0), 0) /
+                                testResults.length
+                              ).toFixed(1) + "%"
+                            : "0%"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm">Average Writing Words</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">
+                          {testResults.length > 0
+                            ? Math.round(
+                                testResults.reduce(
+                                  (acc, result) =>
+                                    acc + (result.writingTask1Words || 0) + (result.writingTask2Words || 0),
+                                  0,
+                                ) / testResults.length,
+                              )
+                            : "0"}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="detail">
+          {selectedResult ? (
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Test Submissions</CardTitle>
+                  <CardTitle>Test Details</CardTitle>
+                  <CardDescription>
+                    Student: {selectedResult.student} | Date: {new Date(selectedResult.timestamp).toLocaleString()}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {testResults.length === 0 ? (
-                    <p className="text-gray-500">No test results available.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                      {testResults.map((test, index) => (
-                        <Button
-                          key={index}
-                          variant={selectedTest?.timestamp === test.timestamp ? "default" : "outline"}
-                          className="w-full justify-start text-left"
-                          onClick={() => handleSelectTest(test)}
-                        >
-                          <div>
-                            <div className="font-medium">{test.student}</div>
-                            <div className="text-sm text-gray-500">{new Date(test.timestamp).toLocaleString()}</div>
-                            <div className="text-xs mt-1">
-                              {test.scored ? (
-                                <span className="text-green-500">Scored: {test.overallBand?.toFixed(1)}</span>
-                              ) : (
-                                <span className="text-yellow-500">Not scored</span>
-                              )}
-                            </div>
-                          </div>
-                        </Button>
-                      ))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Reading Answers</h3>
+                      <div className="border rounded-md p-4 h-[400px] overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Question</TableHead>
+                              <TableHead>Answer</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedResult.readingAnswers &&
+                              Object.entries(selectedResult.readingAnswers).map(([questionId, answer]) => (
+                                <TableRow key={questionId}>
+                                  <TableCell>{questionId}</TableCell>
+                                  <TableCell>{answer}</TableCell>
+                                </TableRow>
+                              ))}
+                            {(!selectedResult.readingAnswers ||
+                              Object.keys(selectedResult.readingAnswers).length === 0) && (
+                              <TableRow>
+                                <TableCell colSpan={2} className="text-center">
+                                  No reading answers available
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
 
-            <div className="md:col-span-2">
-              {selectedTest ? (
-                <div className="space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Test Details</CardTitle>
-                    </CardHeader>
-                    <CardContent>
+                    <div>
+                      <h3 className="text-lg font-medium mb-4">Listening Answers</h3>
+                      <div className="border rounded-md p-4 h-[400px] overflow-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Question</TableHead>
+                              <TableHead>Answer</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedResult.listeningAnswers &&
+                              Object.entries(selectedResult.listeningAnswers).map(([questionId, answer]) => (
+                                <TableRow key={questionId}>
+                                  <TableCell>{questionId}</TableCell>
+                                  <TableCell>{answer}</TableCell>
+                                </TableRow>
+                              ))}
+                            {(!selectedResult.listeningAnswers ||
+                              Object.keys(selectedResult.listeningAnswers).length === 0) && (
+                              <TableRow>
+                                <TableCell colSpan={2} className="text-center">
+                                  No listening answers available
+                                </TableCell>
+                              </TableRow>
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6">
+                    <h3 className="text-lg font-medium mb-4">Writing Task 1</h3>
+                    <div className="border rounded-md p-4 min-h-[200px] mb-4">
+                      <p className="whitespace-pre-wrap">{selectedResult.writingTask1 || "NA"}</p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Word count: {selectedResult.writingTask1Words || 0} words
+                      </p>
+                    </div>
+
+                    <h3 className="text-lg font-medium mb-4">Writing Task 2</h3>
+                    <div className="border rounded-md p-4 min-h-[200px]">
+                      <p className="whitespace-pre-wrap">{selectedResult.writingTask2 || "NA"}</p>
+                      <p className="text-sm text-gray-500 mt-2">
+                        Word count: {selectedResult.writingTask2Words || 0} words
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 border rounded-md p-6 bg-gray-50">
+                    <h3 className="text-lg font-medium mb-4">Score and Rate Test</h3>
+
+                    {error && (
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-4">
                         <div>
-                          <h3 className="text-lg font-medium">Student: {selectedTest.student}</h3>
-                          <p className="text-sm text-gray-500">
-                            Completed: {new Date(selectedTest.timestamp).toLocaleString()}
+                          <Label htmlFor="readingScore">
+                            Reading Score (out of {selectedResult.readingTotal || 40})
+                          </Label>
+                          <Input
+                            id="readingScore"
+                            type="number"
+                            min="0"
+                            max="40"
+                            placeholder="0"
+                            value={readingScore}
+                            onChange={(e) => {
+                              const value = Number.parseInt(e.target.value)
+                              if (isNaN(value)) {
+                                setReadingScore(0)
+                              } else if (value > 40) {
+                                setReadingScore(40)
+                                setError("Reading score cannot exceed 40")
+                              } else {
+                                setReadingScore(value)
+                                setError("")
+                              }
+                            }}
+                          />
+                          <p className="text-sm text-gray-500 mt-1">
+                            Band: {calculateBandScore(readingScore, selectedResult.readingTotal || 40).toFixed(1)}
                           </p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div>
-                            <h4 className="font-medium mb-2">Reading</h4>
-                            <p>
-                              Questions Answered:{" "}
-                              {selectedTest.readingAnswers?.filter((a: string) => a?.trim()).length || 0}/40
-                            </p>
-                          </div>
-                          <div>
-                            <h4 className="font-medium mb-2">Listening</h4>
-                            <p>
-                              Questions Answered:{" "}
-                              {selectedTest.listeningAnswers?.filter((a: string) => a?.trim()).length || 0}/40
-                            </p>
-                          </div>
-                        </div>
-
                         <div>
-                          <h4 className="font-medium mb-2">Writing Task 1</h4>
-                          <p className="text-sm mb-1">Word Count: {selectedTest.writingTask1Words || 0} words</p>
-                          <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded max-h-40 overflow-y-auto">
-                            <p className="text-sm whitespace-pre-wrap">
-                              {selectedTest.writingTask1 || "No response provided"}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div>
-                          <h4 className="font-medium mb-2">Writing Task 2</h4>
-                          <p className="text-sm mb-1">Word Count: {selectedTest.writingTask2Words || 0} words</p>
-                          <div className="bg-gray-100 dark:bg-gray-800 p-3 rounded max-h-40 overflow-y-auto">
-                            <p className="text-sm whitespace-pre-wrap">
-                              {selectedTest.writingTask2 || "No response provided"}
-                            </p>
-                          </div>
+                          <Label htmlFor="listeningScore">
+                            Listening Score (out of {selectedResult.listeningTotal || 40})
+                          </Label>
+                          <Input
+                            id="listeningScore"
+                            type="number"
+                            min="0"
+                            max="40"
+                            placeholder="0"
+                            value={listeningScore}
+                            onChange={(e) => {
+                              const value = Number.parseInt(e.target.value)
+                              if (isNaN(value)) {
+                                setListeningScore(0)
+                              } else if (value > 40) {
+                                setListeningScore(40)
+                                setError("Listening score cannot exceed 40")
+                              } else {
+                                setListeningScore(value)
+                                setError("")
+                              }
+                            }}
+                          />
+                          <p className="text-sm text-gray-500 mt-1">
+                            Band: {calculateBandScore(listeningScore, selectedResult.listeningTotal || 40).toFixed(1)}
+                          </p>
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Score and Rate Test</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      {scoreError && (
-                        <Alert variant="destructive" className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{scoreError}</AlertDescription>
-                        </Alert>
-                      )}
-                      {success && (
-                        <Alert className="mb-4 bg-green-100 dark:bg-green-900 border-green-500">
-                          <AlertDescription className="text-green-800 dark:text-green-200">{success}</AlertDescription>
-                        </Alert>
-                      )}
-                      {error && (
-                        <Alert variant="destructive" className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      )}
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
                         <div>
-                          <Label htmlFor="reading-score">Reading Score (out of 40)</Label>
+                          <Label htmlFor="writingBand">Writing Band Score (out of 9.0)</Label>
                           <Input
-                            id="reading-score"
-                            type="number"
-                            min="0"
-                            max="40"
-                            value={readingScore}
-                            onChange={handleReadingScoreChange}
-                            placeholder="0"
-                            className="mt-1"
-                          />
-                          <p className="text-sm mt-1">
-                            Band: {calculateBandScore(Number.parseInt(readingScore) || 0, 40).toFixed(1)}
-                          </p>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="listening-score">Listening Score (out of 40)</Label>
-                          <Input
-                            id="listening-score"
-                            type="number"
-                            min="0"
-                            max="40"
-                            value={listeningScore}
-                            onChange={handleListeningScoreChange}
-                            placeholder="0"
-                            className="mt-1"
-                          />
-                          <p className="text-sm mt-1">
-                            Band: {calculateBandScore(Number.parseInt(listeningScore) || 0, 40).toFixed(1)}
-                          </p>
-                        </div>
-
-                        <div>
-                          <Label htmlFor="writing-band">Writing Band Score (out of 9.0)</Label>
-                          <Input
-                            id="writing-band"
+                            id="writingBand"
                             type="number"
                             min="0"
                             max="9"
                             step="0.5"
-                            value={writingBand}
-                            onChange={handleWritingBandChange}
                             placeholder="0"
-                            className="mt-1"
+                            value={writingBand}
+                            onChange={(e) => {
+                              const value = Number.parseFloat(e.target.value)
+                              if (isNaN(value)) {
+                                setWritingBand(0)
+                              } else if (value > 9) {
+                                setWritingBand(9)
+                                setError("Writing band score cannot exceed 9.0")
+                              } else {
+                                setWritingBand(value)
+                                setError("")
+                              }
+                            }}
                           />
                         </div>
 
                         <div>
-                          <Label htmlFor="overall-band">Overall Band Score</Label>
-                          <Input
-                            id="overall-band"
-                            type="text"
-                            value={overallBand}
-                            readOnly
-                            className="mt-1 bg-gray-100 dark:bg-gray-800"
-                          />
+                          <Label htmlFor="overallBand">Overall Band Score</Label>
+                          <div className="flex items-center space-x-2">
+                            <Input
+                              id="overallBand"
+                              type="number"
+                              value={calculateOverallBand()}
+                              readOnly
+                              className="bg-gray-100"
+                            />
+                            <Button onClick={handleUpdateScores}>Update Scores</Button>
+                          </div>
                         </div>
                       </div>
+                    </div>
 
-                      <Button onClick={handleUpdateScores} className="mt-6 w-full">
-                        Update Scores
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="p-6">
-                    <p className="text-gray-500 text-center">Select a test to view details and score it.</p>
-                  </CardContent>
-                </Card>
-              )}
+                    {telegramMessage && (
+                      <div className="mt-6">
+                        <div className="flex justify-between items-center mb-2">
+                          <h4 className="font-medium">Send Results to Telegram</h4>
+                          <Button onClick={sendToTelegram} size="sm" className="flex items-center">
+                            <Send className="h-4 w-4 mr-1" />
+                            Send
+                          </Button>
+                        </div>
+                        <div className="border rounded-md p-4 bg-white">
+                          <pre className="whitespace-pre-wrap text-sm">{telegramMessage}</pre>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="settings">
-          <Card>
-            <CardHeader>
-              <CardTitle>Telegram Notification Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="telegram-token">Telegram Bot Token</Label>
-                  <Input
-                    id="telegram-token"
-                    value={telegramToken}
-                    onChange={(e) => setTelegramToken(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="chat-id">Chat ID</Label>
-                  <Input id="chat-id" value={chatId} onChange={(e) => setChatId(e.target.value)} className="mt-1" />
-                </div>
-
-                <Button
-                  onClick={() => {
-                    localStorage.setItem("telegramToken", telegramToken)
-                    localStorage.setItem("telegramChatId", chatId)
-                    setSuccess("Telegram settings saved successfully!")
-                    setTimeout(() => setSuccess(""), 3000)
-                  }}
-                >
-                  Save Settings
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+          ) : (
+            <div className="text-center py-12">
+              <h3 className="text-lg font-medium mb-2">No test selected</h3>
+              <p className="text-gray-500">Please select a test from the Results tab to view details</p>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

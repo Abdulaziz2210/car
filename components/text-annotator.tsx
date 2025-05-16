@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, type ReactNode } from "react"
 
 interface Annotation {
   type: string
@@ -14,9 +14,10 @@ interface TextAnnotatorProps {
   annotations: Annotation[]
   onAnnotation: (annotation: Annotation) => void
   currentTool: string | null
+  children?: ReactNode
 }
 
-export function TextAnnotator({ content, annotations, onAnnotation, currentTool }: TextAnnotatorProps) {
+export function TextAnnotator({ content, annotations, onAnnotation, currentTool, children }: TextAnnotatorProps) {
   const [selectedText, setSelectedText] = useState("")
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number } | null>(null)
   const textRef = useRef<HTMLDivElement>(null)
@@ -84,12 +85,6 @@ export function TextAnnotator({ content, annotations, onAnnotation, currentTool 
             <span className="absolute inset-0 border-2 border-red-500 rounded-full -m-0.5 z-0"></span>
           </span>,
         )
-      } else if (annotation.type === "underline") {
-        segments.push(
-          <span key={`annotation-${annotation.startIndex}`} className="underline decoration-red-500 decoration-2">
-            {annotatedText}
-          </span>,
-        )
       }
 
       lastIndex = annotation.endIndex
@@ -109,7 +104,7 @@ export function TextAnnotator({ content, annotations, onAnnotation, currentTool 
       className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 select-text cursor-text"
       onMouseUp={handleMouseUp}
     >
-      {renderAnnotatedText()}
+      {children || renderAnnotatedText()}
     </div>
   )
 }

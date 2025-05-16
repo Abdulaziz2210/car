@@ -6,7 +6,7 @@ export async function POST(request: Request) {
 
     // Use the provided token or fall back to a default
     const botToken = token || process.env.TELEGRAM_BOT_TOKEN || "8115894799:AAGckh-QqdWre1Bkfq6l8FrQcNqmVPgLJV4"
-    const chatId = process.env.TELEGRAM_CHAT_ID || "-1002000000000" // Replace with your actual chat ID
+    const chatId = process.env.TELEGRAM_CHAT_ID || "-1002618961875" // Replace with your actual chat ID
 
     // Send message to Telegram
     const telegramResponse = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
