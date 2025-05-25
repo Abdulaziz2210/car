@@ -121,7 +121,6 @@ export default function AdminPage() {
     if (percentage >= 40) return 4.0
     if (percentage >= 30) return 3.0
     if (percentage >= 20) return 2.0
-    if (percentage >= 10) return 1.0
     return 1.0
   }
 
@@ -292,24 +291,29 @@ Band: ${writingBand.toFixed(1)}
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        <Button
-          variant="outline"
-          onClick={() => {
-            sessionStorage.removeItem("isLoggedIn")
-            sessionStorage.removeItem("currentUser")
-            router.push("/")
-          }}
-        >
-          Logout
-        </Button>
+        <div className="space-x-2">
+          <Button variant="outline" onClick={() => router.push("/admin/password-generator")}>
+            Password Generator
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              sessionStorage.removeItem("isLoggedIn")
+              sessionStorage.removeItem("currentUser")
+              router.push("/")
+            }}
+          >
+            Logout
+          </Button>
+        </div>
       </div>
 
       <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="results">Test Results</TabsTrigger>
-          {/* <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="detail">Detailed View</TabsTrigger> */}
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="detail">Detailed View</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">

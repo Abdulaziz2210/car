@@ -88,7 +88,7 @@ export default function AcademicNoteCompletion() {
               <TabsTrigger value="passage">Passage</TabsTrigger>
               <TabsTrigger value="questions">Questions</TabsTrigger>
             </TabsList>
-            <TabsContent value="passage" className="p-4 border rounded-md mt-2">
+            <TabsContent value="passage" className="border-solid">
               <div className="prose dark:prose-invert max-w-none">
                 <h2>Climate Change and Global Warming</h2>
                 <p>

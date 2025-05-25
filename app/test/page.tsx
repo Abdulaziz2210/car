@@ -53,8 +53,10 @@ const calculateBandScore = (rawScore: number, totalQuestions: number): number =>
   if (percentage >= 35) return 3.5
   if (percentage >= 30) return 3.0
   if (percentage >= 25) return 2.5
-
-  return 2.0 // Minimum band score (unless score is 0)
+  if (percentage >= 20) return 2.0
+  if (percentage >= 15) return 1.5
+  if (percentage >= 10) return 1.0
+  return 1.0// Minimum band score (unless score is 0)
 }
 
 // Add this CSS to the component to support animation delays
@@ -976,9 +978,9 @@ Task 2 (${task2Words} words):
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Left column - Reading passage */}
-          <div className="border rounded-md p-4 h-[600px] overflow-auto">
-            <h3 className="text-xl font-semibold mb-2">Reading Passage {currentPassage}</h3>
-            <div className="space-y-2">
+          <div className="border overflow-auto">
+            <h3 className="text-xl font-semibold">Reading Passage {currentPassage}</h3>
+            <div className="">
               <p>The first paragraph of reading passage {currentPassage}.</p>
               <p>The second paragraph of reading passage {currentPassage}.</p>
               <p>The third paragraph of reading passage {currentPassage}.</p>
@@ -997,8 +999,8 @@ Task 2 (${task2Words} words):
           </div>
 
           {/* Right column - Questions */}
-          <div className="border rounded-md p-4 h-[600px] overflow-auto">
-            <h3 className="text-xl font-semibold mb-4">Reading Questions</h3>
+          <div className="">
+            <h3 className="text-xl font-semibold">Reading Questions</h3>
             <ol className="list-decimal pl-5 space-y-4">
               {Array.from({ length: currentPassage === 3 ? 14 : 13 }, (_, i) => {
                 const questionIndex = i + (currentPassage - 1) * (currentPassage === 3 ? 13 : 13)
@@ -1010,7 +1012,7 @@ Task 2 (${task2Words} words):
                     <input
                       type="text"
                       id={`reading-answer-${questionIndex}`}
-                      className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                      className="w-full border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                       value={readingAnswers[questionIndex] || ""}
                       onChange={(e) => handleReadingAnswerChange(questionIndex, e.target.value)}
                     />

@@ -22,7 +22,6 @@ export default function TextAnnotation({ children, isWritingSection = false }) {
       span.style.borderRadius = "50%"
       span.style.padding = "0 2px"
     } else {
-      span.style.textDecoration = "underline"
       span.style.textDecorationColor = "blue"
       span.style.textDecorationThickness = "2px"
     }

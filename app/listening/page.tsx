@@ -175,6 +175,10 @@ export default function ListeningTest() {
     } else {
       localStorage.setItem("currentSection", "reading")
       router.push("/reading")
+      // Mark listening as completed when moving to reading
+      if (currentSection === sections.length) {
+        localStorage.setItem("listeningCompleted", "true")
+      }
     }
   }
 
@@ -645,6 +649,71 @@ Results: The first set of seedlings was successful`,
 
   // Function to render fill-in-the-blank questions in a more readable format
   const renderFillInTheBlank = (content: string) => {
+    // First, let's handle the special case for Section 1 and Section 4 which have numbered blanks
+    if (currentSection === 1 || currentSection === 4) {
+      // Split content by lines for better processing
+      const lines = content.split("\n")
+      const result = []
+
+      // Process each line
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]
+
+        // Skip empty lines
+        if (!line.trim()) {
+          result.push(<br key={`br-${i}`} />)
+          continue
+        }
+
+        // Check if the line contains a question [number]
+        if (line.includes("[") && line.includes("]")) {
+          // Split the line by the question markers
+          const parts = line.split(/(\[\d+\])/g)
+
+          // Create a line with input fields
+          const lineWithInputs = (
+            <div key={`line-${i}`} className="mb-3 flex flex-wrap items-center">
+              {parts.map((part, partIndex) => {
+                const match = part.match(/\[(\d+)\]/)
+                if (match) {
+                  const questionNumber = match[1]
+                  const questionId = `lq${questionNumber}`
+
+                  return (
+                    <span key={`input-${partIndex}`} className="inline-block mx-1">
+                      <input
+                        type="text"
+                        value={answers[questionId] || ""}
+                        onChange={(e) => handleAnswerChange(questionId, e.target.value)}
+                        className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-gray-600 min-w-[120px] bg-transparent text-lg"
+                        aria-label={`Question ${questionNumber}`}
+                      />
+                      {inputErrors[questionId] && (
+                        <div className="text-red-500 text-xs mt-1">{inputErrors[questionId]}</div>
+                      )}
+                    </span>
+                  )
+                }
+                return <span key={`text-${partIndex}`}>{part}</span>
+              })}
+            </div>
+          )
+
+          result.push(lineWithInputs)
+        } else {
+          // Regular text line
+          result.push(
+            <p key={`text-line-${i}`} className="mb-3 text-lg">
+              {line}
+            </p>,
+          )
+        }
+      }
+
+      return result
+    }
+
+    // For other sections, use the original implementation
     const lines = content.split("\n")
     const result = []
 
@@ -722,8 +791,278 @@ Results: The first set of seedlings was successful`,
             aria-label={`Question ${questionNumber}`}
           />
           {inputErrors[`lq${questionNumber}`] && (
-            <div className="text-red-500 text-xl ml-2 w-full mt-1">{inputErrors[`lq${questionNumber}`]}</div>
+            <div className="text-red-500 text-xs ml-2 w-full mt-1">{inputErrors[`lq${questionNumber}`]}</div>
           )}
+        </div>,
+      )
+    }
+
+    return result
+  }
+
+  // Fix the renderMultipleChoice function to ensure radio buttons are clickable
+  const renderMultipleChoiceFixed = (content: string) => {
+    const lines = content.split("\n")
+    const result = []
+
+    let currentQuestion = null
+    let options = []
+    let inMapSection = false
+    let inBoxSection = false
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim()
+
+      // Check if we're entering the map section
+      if (line.includes("Questions 15-20")) {
+        inMapSection = true
+      }
+
+      // Check if we're entering the box section (questions 27-30)
+      if (line.includes("Questions 27-30")) {
+        inBoxSection = true
+      }
+
+      // Check if this is a question line (starts with a number)
+      const questionMatch = line.match(/^(\d+)\s(.+)/)
+      if (questionMatch) {
+        const questionNumber = Number.parseInt(questionMatch[1])
+
+        // If we have a previous question, add it to the result
+        if (currentQuestion) {
+          result.push(
+            <div key={`question-${currentQuestion.number}`} className="mb-6">
+              <p className="mb-3 text-lg font-medium">
+                {currentQuestion.number} {currentQuestion.text}
+              </p>
+              <div className="space-y-3">
+                {options.map((option, index) => (
+                  <div
+                    key={`option-${index}`}
+                    className={`flex items-start ml-4 mb-1 p-3 rounded cursor-pointer text-lg ${
+                      answers[`lq${currentQuestion.number}`] === option.letter
+                        ? "bg-blue-100 dark:bg-blue-900"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                    onClick={() => handleAnswerChange(`lq${currentQuestion.number}`, option.letter)}
+                  >
+                    <div className="flex items-center w-full">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
+                          answers[`lq${currentQuestion.number}`] === option.letter
+                            ? "border-blue-500 bg-blue-500"
+                            : "border-gray-400"
+                        }`}
+                      >
+                        {answers[`lq${currentQuestion.number}`] === option.letter && (
+                          <div className="w-2 h-2 rounded-full bg-white"></div>
+                        )}
+                      </div>
+                      <span className="flex-1">
+                        {option.letter} {option.text}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>,
+          )
+          options = []
+        }
+
+        // Handle map questions (15-20)
+        if (inMapSection && currentSectionData.mapQuestions?.includes(questionNumber)) {
+          result.push(
+            <div key={`map-question-${questionNumber}`} className="mb-4 flex items-center">
+              <span className="mr-3 text-lg">
+                {questionNumber} {questionMatch[2]}
+              </span>
+              <input
+                type="text"
+                value={answers[`lq${questionNumber}`] || ""}
+                onChange={(e) => handleAnswerChange(`lq${questionNumber}`, e.target.value)}
+                className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-gray-600 w-16 bg-transparent text-lg"
+                aria-label={`Question ${questionNumber}`}
+                maxLength={1}
+                placeholder="A-I"
+              />
+              {inputErrors[`lq${questionNumber}`] && (
+                <div className="text-red-500 text-xs ml-2">{inputErrors[`lq${questionNumber}`]}</div>
+              )}
+            </div>,
+          )
+          continue
+        }
+
+        // Handle box questions (27-30)
+        if (inBoxSection && currentSectionData.boxQuestions?.includes(questionNumber)) {
+          result.push(
+            <div key={`box-question-${questionNumber}`} className="mb-4 flex items-center">
+              <span className="mr-3 text-lg">
+                {questionNumber} {questionMatch[2]}
+              </span>
+              <input
+                type="text"
+                value={answers[`lq${questionNumber}`] || ""}
+                onChange={(e) => handleAnswerChange(`lq${questionNumber}`, e.target.value)}
+                className="border-b-2 border-dotted border-gray-400 focus:outline-none focus:border-gray-600 w-16 bg-transparent text-lg"
+                aria-label={`Question ${questionNumber}`}
+                maxLength={1}
+                placeholder="A-F"
+              />
+              {inputErrors[`lq${questionNumber}`] && (
+                <div className="text-red-500 text-xs ml-2">{inputErrors[`lq${questionNumber}`]}</div>
+              )}
+            </div>,
+          )
+          continue
+        }
+
+        currentQuestion = {
+          number: questionMatch[1],
+          text: questionMatch[2],
+        }
+      }
+      // Check if this is an option line (starts with A, B, or C)
+      else if (currentQuestion && line.match(/^[A-C]\s/)) {
+        const optionMatch = line.match(/^([A-C])\s(.+)/)
+        if (optionMatch) {
+          options.push({
+            letter: optionMatch[1],
+            text: optionMatch[2],
+          })
+        }
+      }
+      // If this is a section header or other text, add it directly
+      else if (line && !line.match(/^[A-C]\s/)) {
+        // If we have a previous question, add it to the result
+        if (currentQuestion) {
+          result.push(
+            <div key={`question-${currentQuestion.number}`} className="mb-6">
+              <p className="mb-3 text-lg font-medium">
+                {currentQuestion.number} {currentQuestion.text}
+              </p>
+              <div className="space-y-3">
+                {options.map((option, index) => (
+                  <div
+                    key={`option-${index}`}
+                    className={`flex items-start ml-4 mb-1 p-3 rounded cursor-pointer text-lg ${
+                      answers[`lq${currentQuestion.number}`] === option.letter
+                        ? "bg-blue-100 dark:bg-blue-900"
+                        : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                    }`}
+                    onClick={() => handleAnswerChange(`lq${currentQuestion.number}`, option.letter)}
+                  >
+                    <div className="flex items-center w-full">
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
+                          answers[`lq${currentQuestion.number}`] === option.letter
+                            ? "border-blue-500 bg-blue-500"
+                            : "border-gray-400"
+                        }`}
+                      >
+                        {answers[`lq${currentQuestion.number}`] === option.letter && (
+                          <div className="w-2 h-2 rounded-full bg-white"></div>
+                        )}
+                      </div>
+                      <span className="flex-1">
+                        {option.letter} {option.text}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>,
+          )
+          currentQuestion = null
+          options = []
+        }
+
+        // Check if this is the map section
+        if (line.includes("Albany Fishing Competition Map")) {
+          result.push(
+            <div key="map-section" className="my-6">
+              <p className="mb-3 text-lg">{line}</p>
+              <div className="flex justify-center my-6">
+                <Image
+                  src="/images/listening/map.png"
+                  alt="Albany Fishing Competition Map"
+                  width={600}
+                  height={420}
+                  className="border border-gray-300 rounded"
+                />
+              </div>
+            </div>,
+          )
+        }
+        // Check if this is the features box for questions 27-30
+        else if (line.includes("Interesting features")) {
+          result.push(
+            <div key="features-box" className="my-6 p-5 border border-gray-300 rounded bg-gray-50 dark:bg-gray-800">
+              <p className="font-bold mb-3 text-lg">{line}</p>
+              <div className="grid grid-cols-2 gap-3 text-lg">
+                <div>A the realistic colours</div>
+                <div>B the sense of space</div>
+                <div>C the unusual interpretation of the theme</div>
+                <div>D the painting technique</div>
+                <div>E the variety of materials use</div>
+                <div>F the use of light and shade</div>
+              </div>
+            </div>,
+          )
+        } else if (line === "Exhibitions") {
+          result.push(
+            <p key="exhibitions-header" className="font-bold mt-5 mb-3 text-lg">
+              {line}
+            </p>,
+          )
+        } else {
+          result.push(
+            <p key={`text-${i}`} className="mb-3 text-lg">
+              {line}
+            </p>,
+          )
+        }
+      }
+    }
+
+    // Add the last question if there is one
+    if (currentQuestion) {
+      result.push(
+        <div key={`question-${currentQuestion.number}`} className="mb-6">
+          <p className="mb-3 text-lg font-medium">
+            {currentQuestion.number} {currentQuestion.text}
+          </p>
+          <div className="space-y-3">
+            {options.map((option, index) => (
+              <div
+                key={`option-${index}`}
+                className={`flex items-start ml-4 mb-1 p-3 rounded cursor-pointer text-lg ${
+                  answers[`lq${currentQuestion.number}`] === option.letter
+                    ? "bg-blue-100 dark:bg-blue-900"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-800"
+                }`}
+                onClick={() => handleAnswerChange(`lq${currentQuestion.number}`, option.letter)}
+              >
+                <div className="flex items-center w-full">
+                  <div
+                    className={`w-5 h-5 rounded-full border-2 mr-3 flex items-center justify-center ${
+                      answers[`lq${currentQuestion.number}`] === option.letter
+                        ? "border-blue-500 bg-blue-500"
+                        : "border-gray-400"
+                    }`}
+                  >
+                    {answers[`lq${currentQuestion.number}`] === option.letter && (
+                      <div className="w-2 h-2 rounded-full bg-white"></div>
+                    )}
+                  </div>
+                  <span className="flex-1">
+                    {option.letter} {option.text}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>,
       )
     }
@@ -734,9 +1073,9 @@ Results: The first set of seedlings was successful`,
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex justify-between items-center border-b-2 border-gray-300 pb-2 mb-2 px-4 pt-4">
-        {/* <div className="text-lg font-bold">FULL MOCK EXAM</div> */}
+        <div className="text-lg font-bold">FULL MOCK EXAM</div>
         <div className="text-lg font-bold">Time: {formatTime(timeRemaining)}</div>
-        {/* <div className="text-lg font-bold">DREAM ZONE LANGUAGE SCHOOL</div> */}
+        <div className="text-lg font-bold">DREAM ZONE LANGUAGE SCHOOL</div>
       </div>
 
       {/* Hidden audio element */}
@@ -771,7 +1110,7 @@ Results: The first set of seedlings was successful`,
 
       <Card className="mx-4 flex-grow mb-4 h-[calc(100vh-220px)]">
         <CardContent className="p-6 h-full overflow-y-auto">
-          <h2 className="text-2xl font-bold mb-6  top-0 bg-white dark:bg-gray-950 py-2 z-10">
+          <h2 className="text-2xl font-bold mb-6 sticky top-0 bg-white dark:bg-gray-950 py-2 z-10">
             {currentSectionData.title}
           </h2>
           <div className="whitespace-pre-line mb-6 text-lg">{currentSectionData.instructions}</div>
@@ -793,7 +1132,7 @@ Results: The first set of seedlings was successful`,
                 onAnnotation={handleAnnotation}
                 currentTool={currentTool}
               >
-                {renderMultipleChoice(currentSectionData.content)}
+                {renderMultipleChoiceFixed(currentSectionData.content)}
               </TextAnnotator>
             )}
           </div>
