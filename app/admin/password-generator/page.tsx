@@ -19,6 +19,7 @@ interface RegisteredUser {
   used: boolean
   candidateNumber?: string
   passwordHistory?: string[]
+  lastLoginAt?: string
 }
 
 export default function PasswordGeneratorPage() {
@@ -564,7 +565,7 @@ ${candidateNumber ? `🆔 *Candidate Number*: ${candidateNumber}` : ""}
                       <TableHead>Student Name</TableHead>
                       <TableHead>Registration Date</TableHead>
                       <TableHead>Candidate Number</TableHead>
-                      <TableHead>Password Status</TableHead>
+                      <TableHead>Login Status</TableHead>
                       <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -622,37 +623,53 @@ ${candidateNumber ? `🆔 *Candidate Number*: ${candidateNumber}` : ""}
                             )}
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-2">
-                              {user.used ? (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">
-                                  Used
-                                </span>
+                            <div className="flex flex-col gap-1">
+                              {user.candidateNumber ? (
+                                <div className="flex items-center gap-2">
+                                  {user.used ? (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">
+                                      Password Used
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                                      Ready to Login
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                                  Active
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                                  No Candidate Number
                                 </span>
                               )}
-                              {user.passwordHistory && user.passwordHistory.length > 0 && (
-                                <span className="text-xs text-gray-500">({user.passwordHistory.length} previous)</span>
+                              {user.lastLoginAt && (
+                                <span className="text-xs text-gray-500">
+                                  Last login: {new Date(user.lastLoginAt).toLocaleString()}
+                                </span>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
-                              <Button variant="outline" size="sm" onClick={() => selectUser(user)}>
-                                Generate Password
-                              </Button>
-                              {!user.candidateNumber && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newNumber = generateCandidateNumber()
-                                    assignCandidateNumber(user, newNumber)
-                                  }}
-                                >
-                                  Auto-assign
+                              {user.candidateNumber ? (
+                                <Button variant="outline" size="sm" onClick={() => selectUser(user)}>
+                                  Generate New Password
                                 </Button>
+                              ) : (
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newNumber = generateCandidateNumber()
+                                      assignCandidateNumber(user, newNumber)
+                                    }}
+                                  >
+                                    Auto-assign Number
+                                  </Button>
+                                  <Button variant="outline" size="sm" onClick={() => selectUser(user)} disabled>
+                                    Need Candidate #
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           </TableCell>
